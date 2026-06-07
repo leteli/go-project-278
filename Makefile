@@ -10,3 +10,5 @@ lint-fix:
 	golangci-lint run --fix
 test:
 	go test -v ./... $(ARGS)
+test-race:
+	go test -v -race ./...
