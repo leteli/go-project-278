@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,13 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestMain(m *testing.M) {
-	gin.SetMode(gin.TestMode)
-	os.Exit(m.Run())
-}
-
 func TestPingRoute(t *testing.T) {
-	router := SetupRouter()
+	router := setupTestRouter()
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
@@ -25,4 +19,12 @@ func TestPingRoute(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, "pong", w.Body.String())
+}
+
+func setupTestRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	h := &Handlers{}
+	h.Register(router)
+	return router
 }
