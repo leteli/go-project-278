@@ -9,6 +9,6 @@ lint:
 lint-fix:
 	golangci-lint run --fix
 test:
-	go test -v ./... $(ARGS)
+	go test -tags=integration -v ./... $(ARGS)
 test-race:
-	go test -v -race ./...
+	go test -tags=integration -v -race ./...

@@ -1,17 +1,19 @@
+# syntax=docker/dockerfile:1.7
+
 FROM golang:1.25-alpine AS backend-builder
 RUN apk add --no-cache git
 WORKDIR /build/code
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-go mod download
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod \
+    go mod download
 
 RUN go install github.com/pressly/goose/v3/cmd/goose@latest
 
 COPY . .
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app ./cmd/app
+RUN --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app ./cmd/app
 
 FROM alpine:3.22
 
