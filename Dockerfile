@@ -5,15 +5,13 @@ RUN apk add --no-cache git
 WORKDIR /build/code
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,id=cacheKey/gomod,target=/go/pkg/mod \
-    go mod download
+RUN go mod download
 
 RUN go install github.com/pressly/goose/v3/cmd/goose@latest
 
 COPY . .
 
-RUN --mount=type=cache,id=cacheKey/gobuild,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app ./cmd/app
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app ./cmd/app
 
 FROM alpine:3.22
 
