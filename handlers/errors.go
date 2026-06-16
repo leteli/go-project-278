@@ -16,6 +16,7 @@ var (
 	ErrorInvalidID         = errors.New("invalid id")
 	ErrorOriginalURLExists = errors.New("original url already exists")
 	ErrorShortNameExists   = errors.New("short name already in use")
+	ErrorInvalidRange      = errors.New("invalid range")
 )
 
 func badRequest(c *gin.Context, err error) {

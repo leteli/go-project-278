@@ -178,6 +178,7 @@ func TestGetLinks(t *testing.T) {
 		w := performRequest(router, http.MethodGet, "/api/links", "")
 
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "links 0-1/2", w.Result().Header.Get("Content-Range"))
 
 		res := decodeLinksResponse(t, w)
 		require.Len(t, res, 2)
@@ -185,19 +186,131 @@ func TestGetLinks(t *testing.T) {
 		assert.Equal(t, second, res[1])
 	})
 
-	t.Run("with limit", func(t *testing.T) {
+	t.Run("with first item", func(t *testing.T) {
 		router := setupTestRouterWithTx(t)
 
 		first := createLink(t, router, "https://example.com/one", "one")
 		createLink(t, router, "https://example.com/two", "two")
 
-		w := performRequest(router, http.MethodGet, "/api/links?limit=1&offset=0", "")
+		w := performRequest(router, http.MethodGet, "/api/links?range=[0,0]", "")
 
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "links 0-0/2", w.Result().Header.Get("Content-Range"))
 
 		res := decodeLinksResponse(t, w)
 		require.Len(t, res, 1)
 		assert.Equal(t, first, res[0])
+	})
+	t.Run("with middle item", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+		second := createLink(t, router, "https://example.com/two", "two")
+		createLink(t, router, "https://example.com/three", "three")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[1,1]", "")
+
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "links 1-1/3", w.Result().Header.Get("Content-Range"))
+
+		res := decodeLinksResponse(t, w)
+		require.Len(t, res, 1)
+		assert.Equal(t, second, res[0])
+	})
+	t.Run("with multiple last items", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+		createLink(t, router, "https://example.com/two", "two")
+		third := createLink(t, router, "https://example.com/three", "three")
+		fourth := createLink(t, router, "https://example.com/four", "four")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[2,3]", "")
+
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "links 2-3/4", w.Result().Header.Get("Content-Range"))
+
+		res := decodeLinksResponse(t, w)
+		require.Len(t, res, 2)
+		assert.Equal(t, third, res[0])
+		assert.Equal(t, fourth, res[1])
+	})
+	t.Run("with greater range end", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+		createLink(t, router, "https://example.com/two", "two")
+		createLink(t, router, "https://example.com/three", "three")
+		fourth := createLink(t, router, "https://example.com/four", "four")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[3,8]", "")
+
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "links 3-3/4", w.Result().Header.Get("Content-Range"))
+
+		res := decodeLinksResponse(t, w)
+		require.Len(t, res, 1)
+		assert.Equal(t, fourth, res[0])
+	})
+	t.Run("with no items in range", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+		createLink(t, router, "https://example.com/one", "one")
+		createLink(t, router, "https://example.com/two", "two")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[2,8]", "")
+
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "links */2", w.Result().Header.Get("Content-Range"))
+		require.Len(t, decodeLinksResponse(t, w), 0)
+	})
+	t.Run("with zero items", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[3,8]", "")
+
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "links */0", w.Result().Header.Get("Content-Range"))
+		require.Len(t, decodeLinksResponse(t, w), 0)
+	})
+	t.Run("with invalid range - max limit exceeded", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[0,10000]", "")
+		require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	})
+	t.Run("with invalid range - end greater than start", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[10,2]", "")
+		require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	})
+	t.Run("with invalid range - negative values", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[-10,2]", "")
+		require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	})
+	t.Run("with invalid range - malformed query", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=sjsur", "")
+		require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	})
+	t.Run("with invalid range - malformed array query", func(t *testing.T) {
+		router := setupTestRouterWithTx(t)
+
+		createLink(t, router, "https://example.com/one", "one")
+
+		w := performRequest(router, http.MethodGet, "/api/links?range=[]", "")
+		require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	})
 }
 

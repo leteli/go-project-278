@@ -19,5 +19,5 @@ func MigrateUp(db *sql.DB) error {
 }
 
 func MigrateDown(db *sql.DB) {
-	goose.Down(db, "migrations")
+	_ = goose.Down(db, "migrations")
 }

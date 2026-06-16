@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := conn.PingContext(ctx); err != nil {
 		log.Fatalf("failed to ping database: %v", err)

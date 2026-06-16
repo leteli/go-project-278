@@ -3,6 +3,7 @@ package handlers
 import (
 	db "code/db/generated"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -34,9 +35,24 @@ func (h *LinkHandler) Register(router *gin.RouterGroup) {
 }
 
 func (h *LinkHandler) List(c *gin.Context) {
-	var params GetLinksDTO
-	if err := c.ShouldBindQuery(&params); err != nil {
+	var query GetLinksDTO
+	if err := c.ShouldBindQuery(&query); err != nil {
 		badRequest(c, err)
+		return
+	}
+	params, err := parseIntRange(query.Range)
+	if err != nil {
+		badRequest(c, err)
+		return
+	}
+	total, err := h.Querier.GetLinksCount(c.Request.Context())
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+	if total == 0 {
+		c.Header("Content-Range", getContentRangeHeader(params.Offset, 0, int(total)))
+		c.JSON(http.StatusOK, []LinkResponse{})
 		return
 	}
 	links, err := h.Querier.GetLinks(c.Request.Context(), db.GetLinksParams{
@@ -47,7 +63,8 @@ func (h *LinkHandler) List(c *gin.Context) {
 		internalServerError(c, err)
 		return
 	}
-	linksResponse := make([]LinkResponse, len(links))
+	count := len(links)
+	linksResponse := make([]LinkResponse, count)
 	for i, l := range links {
 		linkRes, err := h.toLinkResponse(l)
 		if err != nil {
@@ -56,6 +73,7 @@ func (h *LinkHandler) List(c *gin.Context) {
 		}
 		linksResponse[i] = linkRes
 	}
+	c.Header("Content-Range", getContentRangeHeader(params.Offset, count, int(total)))
 	c.JSON(http.StatusOK, linksResponse)
 }
 
@@ -68,7 +86,6 @@ func (h *LinkHandler) Create(c *gin.Context) {
 	}
 	link, err := h.Service.Create(c.Request.Context(), body)
 	if err != nil {
-		fmt.Errorf("create err: %w", err)
 		if isLinkConflict(err) {
 			conflict(c, err)
 			return
@@ -78,7 +95,6 @@ func (h *LinkHandler) Create(c *gin.Context) {
 	}
 	linksRes, err := h.toLinkResponse(link)
 	if err != nil {
-		fmt.Errorf("create toLinkResponse err: %w", err)
 		internalServerError(c, err)
 		return
 	}
@@ -88,7 +104,7 @@ func (h *LinkHandler) Create(c *gin.Context) {
 func (h *LinkHandler) Get(c *gin.Context) {
 	id, err := parseID(c)
 	if err != nil {
-		badRequest(c, fmt.Errorf("get link: %w", err))
+		badRequest(c, err)
 		return
 	}
 	link, err := h.Querier.GetLink(c.Request.Context(), id)
@@ -111,7 +127,7 @@ func (h *LinkHandler) Get(c *gin.Context) {
 func (h *LinkHandler) Update(c *gin.Context) {
 	id, err := parseID(c)
 	if err != nil {
-		badRequest(c, fmt.Errorf("update link: %w", err))
+		badRequest(c, err)
 		return
 	}
 	var body UpdateLinkDTO
@@ -147,7 +163,7 @@ func (h *LinkHandler) Update(c *gin.Context) {
 func (h *LinkHandler) Delete(c *gin.Context) {
 	id, err := parseID(c)
 	if err != nil {
-		badRequest(c, fmt.Errorf("delete link: %w", err))
+		badRequest(c, err)
 		return
 	}
 	rowsCount, err := h.Querier.DeleteLink(c.Request.Context(), id)
@@ -184,4 +200,47 @@ func (h *LinkHandler) toLinkResponse(link db.Link) (LinkResponse, error) {
 		ShortName:   link.ShortName,
 		ShortUrl:    shortUrl,
 	}, nil
+}
+
+var (
+	MaxRange = 100
+)
+
+type PaginationParams struct {
+	Limit  int
+	Offset int
+}
+
+func parseIntRange(str string) (PaginationParams, error) {
+	if str == "" {
+		return PaginationParams{Limit: MaxRange, Offset: 0}, nil
+	}
+	var nums []int
+	if err := json.Unmarshal([]byte(str), &nums); err != nil {
+		return PaginationParams{}, ErrorInvalidRange
+	}
+
+	if len(nums) != 2 {
+		return PaginationParams{}, ErrorInvalidRange
+	}
+	start := nums[0]
+	end := nums[1]
+
+	if end < 0 || start < 0 {
+		return PaginationParams{}, ErrorInvalidRange
+	}
+	if end < start {
+		return PaginationParams{}, ErrorInvalidRange
+	}
+	if end-start > MaxRange {
+		return PaginationParams{}, ErrorInvalidRange
+	}
+	return PaginationParams{Limit: end - start + 1, Offset: start}, nil
+}
+
+func getContentRangeHeader(offset, count, total int) string {
+	if total == 0 || count == 0 {
+		return fmt.Sprintf("links */%d", total)
+	}
+	return fmt.Sprintf("links %d-%d/%d", offset, offset+count-1, total)
 }

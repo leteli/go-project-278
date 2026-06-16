@@ -26,3 +26,7 @@ RETURNING id, original_url, short_name, created_at;
 -- name: DeleteLink :execrows
 DELETE FROM links
 WHERE id = $1;
+
+-- name: GetLinksCount :one
+SELECT COUNT(*)
+FROM links;

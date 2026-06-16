@@ -13,6 +13,7 @@ type Querier interface {
 	DeleteLink(ctx context.Context, id int64) (int64, error)
 	GetLink(ctx context.Context, id int64) (Link, error)
 	GetLinks(ctx context.Context, arg GetLinksParams) ([]Link, error)
+	GetLinksCount(ctx context.Context) (int64, error)
 	UpdateLink(ctx context.Context, arg UpdateLinkParams) (Link, error)
 }
 

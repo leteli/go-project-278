@@ -1,8 +1,7 @@
 package handlers
 
 type GetLinksDTO struct {
-	Limit  int64 `form:"limit,default=20" binding:"min=1,max=100"`
-	Offset int64 `form:"offset,default=0" binding:"min=0"`
+	Range string `form:"range"`
 }
 
 type CreateLinkDTO struct {
